@@ -1,0 +1,64 @@
+---
+title: GraphQL Error Patterns
+id: TN0042
+tags: [schema-design]
+---
+
+Errors are one of the most difficult patterns to standardize in a distributed system. Contrary to popular belief, GraphQL actually has a well-defined type system for errors as part of its [specification](http://spec.graphql.org/draft/#sec-Errors):
+
+```json
+{
+  "errors": [
+    {
+      "message": "Name for character with ID 1002 could not be fetched.",
+      "locations": [{ "line": 6, "column": 7 }],
+      "path": ["hero", "heroFriends", 1, "name"],
+      "extensions": {
+        "code": "CAN_NOT_FETCH_BY_ID",
+        "timestamp": "Fri Feb 9 14:33:09 UTC 2018"
+      }
+    }
+  ]
+}
+```
+
+All errors in GraphQL must follow a strict type to indicate a `message`, what caused the error in the `locations` and `path`, and even provides means for [extensibility with the `extensions` block](http://spec.graphql.org/draft/#sec-Errors.Error-Result-Format).
+
+If errors are well-defined, why is error handling in GraphQL so difficult? The answer, as with most hard problems in tech, revolves around people. Working across team and service boundries, everyone has a different opinion on what an error is and who is responsible for getting back to a sucessful state.
+
+## Transport Protocol
+The first issue we come across is that GraphQL is just a type-system for describing a schema and operations. It does not describe the transport protocol to be used to communicated to clients. It *reccomends* using HTTP, and the [GraphQL Foundation has defined how that could work](https://github.com/graphql/graphql-over-http), but HTTP and REST conventions do not always align with the GraphQL execution model.
+
+From a GraphQL perspective if we get a request and are able to parse and execute an operation, then that operation can execute many different resolvers. Those resolvers may return data and some may have errors. This why you can have both data and errors in a GraphQL response.
+
+```json
+{
+  "errors": [
+    {
+      "message": "Name for character with ID 1002 could not be fetched.",
+      "locations": [{ "line": 6, "column": 7 }],
+      "path": ["hero", "heroFriends", 1, "name"]
+    }
+  ],
+  "data": {
+    "hero": {
+      "name": "R2-D2",
+      "heroFriends": [
+        {
+          "id": "1000",
+          "name": "Luke Skywalker"
+        },
+        null,
+        {
+          "id": "1003",
+          "name": "Leia Organa"
+        }
+      ]
+    }
+  }
+}
+```
+
+If you were to ask a REST developer what HTTP status code they should return, they would probably say HTTP 500, but that doesn't work in GraphQL. The entire response is not an error, only part of it. By returning HTTP 200 in GraphQL we are not indicating there are no errors; only that the GraphQL server was sucessfully able to parse your request and return some valid GraphQL response. HTTP is used to decribe the request and response communication, the format of the response is described by the GraphQL spec.
+
+
